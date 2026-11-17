@@ -46,14 +46,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-extract_apk_sig() {
+extract_apk_info() {
   local apk="$1"
   python3 - "$apk" <<'PYEOF'
 import hashlib
 import struct
 import sys
+import zipfile
 
-with open(sys.argv[1], "rb") as f:
+apk_path = sys.argv[1]
+
+with open(apk_path, "rb") as f:
     data = f.read()
 
 eocd = data.rfind(b"PK\x05\x06")
@@ -63,6 +66,7 @@ if eocd == -1:
 cd_off = struct.unpack_from("<I", data, eocd + 16)[0]
 bsize = struct.unpack_from("<Q", data, cd_off - 24)[0]
 p = cd_off - bsize
+sig_size = sig_hash = None
 while p < cd_off - 24:
     plen, pid = struct.unpack_from("<QI", data, p)
     if pid in (0x7109871a, 0xf05368c0):
@@ -70,11 +74,58 @@ while p < cd_off - 24:
         off = 12 + struct.unpack_from("<I", v, 12)[0] + 4
         clen = struct.unpack_from("<I", v, off + 4)[0]
         cert = v[off + 8 : off + 8 + clen]
-        print(f"{hex(clen)} {hashlib.sha256(cert).hexdigest()}")
-        sys.exit(0)
+        sig_size = hex(clen)
+        sig_hash = hashlib.sha256(cert).hexdigest()
+        break
     p += 8 + plen
 
-sys.exit("APK v2/v3 signing block not found")
+if not sig_size:
+    sys.exit("APK v2/v3 signing block not found")
+
+pkg_name = ""
+with zipfile.ZipFile(apk_path) as z:
+    m = z.read("AndroidManifest.xml")
+
+_, sp_hdr_size, sp_size, str_count, _, flags, str_start, _ = struct.unpack_from("<HHIIIIII", m, 8)
+utf8 = bool(flags & (1 << 8))
+offsets = struct.unpack_from(f"<{str_count}I", m, 8 + sp_hdr_size)
+base = 8 + str_start
+strings = []
+for off in offsets:
+    pos = base + off
+    if utf8:
+        b = m[pos]
+        pos += 2 if (b & 0x80) else 1
+        blen = m[pos]
+        pos += 1
+        if blen & 0x80:
+            blen = ((blen & 0x7f) << 8) | m[pos]
+            pos += 1
+        strings.append(m[pos : pos + blen].decode("utf-8", "ignore"))
+    else:
+        clen = struct.unpack_from("<H", m, pos)[0]
+        pos += 2
+        if clen & 0x8000:
+            clen = ((clen & 0x7fff) << 16) | struct.unpack_from("<H", m, pos)[0]
+            pos += 2
+        strings.append(m[pos : pos + clen * 2].decode("utf-16le", "ignore"))
+
+pos = 8 + sp_size
+while pos + 8 <= len(m):
+    ctype, chdr, csize = struct.unpack_from("<HHI", m, pos)
+    if ctype == 0x0102:
+        name_idx, _, attr_size, attr_count = struct.unpack_from("<IHHH", m, pos + 20)
+        if strings[name_idx] == "manifest":
+            apos = pos + chdr
+            for i in range(attr_count):
+                _, aname, rval = struct.unpack_from("<III", m, apos + i * attr_size)
+                if strings[aname] == "package" and rval != 0xFFFFFFFF:
+                    pkg_name = strings[rval]
+                    break
+            break
+    pos += csize
+
+print(f"{sig_size} {sig_hash} {pkg_name}")
 PYEOF
 }
 
@@ -83,7 +134,11 @@ if [ -n "$APK_PATH" ]; then
     echo "APK not found: $APK_PATH" >&2
     exit 1
   fi
-  read -r KSU_NEXT_MANAGER_SIZE KSU_NEXT_MANAGER_HASH < <(extract_apk_sig "$APK_PATH")
+  read -r KSU_NEXT_MANAGER_SIZE KSU_NEXT_MANAGER_HASH _apk_pkg < <(extract_apk_info "$APK_PATH")
+  if [ -z "$KSU_MANAGER_PACKAGE" ] && [ -n "${_apk_pkg:-}" ]; then
+    KSU_MANAGER_PACKAGE="$_apk_pkg"
+  fi
+  echo "Detected APK manager: package=${KSU_MANAGER_PACKAGE:-default} size=${KSU_NEXT_MANAGER_SIZE} hash=${KSU_NEXT_MANAGER_HASH}"
 fi
 
 install_modloader() {
