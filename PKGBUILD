@@ -3,7 +3,7 @@
 
 _pkg=kernelsu
 pkgname=${_pkg}-dkms
-pkgver=3.3.0+7+gfde078c9
+pkgver=3.3.1+28+gb42ad459
 _ver=$pkgver
 pkgrel=1
 _branch=waydroid-experimental
@@ -198,5 +198,5 @@ package() {
 
 	# Install load script (for modloader)
 	mkdir -p "$pkgdir/usr/bin"
-	install -Dm755 "$(readlink -f load-kernelsu.in)" "$pkgdir/usr/bin/load-kernelsu"
+	install -Dm755 "$(readlink -f "$srcdir/load-kernelsu.in")" "$pkgdir/usr/bin/load-kernelsu"
 }

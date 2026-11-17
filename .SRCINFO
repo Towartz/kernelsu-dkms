@@ -1,6 +1,6 @@
 pkgbase = kernelsu-dkms
 	pkgdesc = A Kernel based root solution for Android. DKMS module for Container-based solutions such as Waydroid.
-	pkgver = 3.3.0+7+gfde078c9
+	pkgver = 3.3.1+28+gb42ad459
 	pkgrel = 1
 	url = https://github.com/supechicken/KernelSU
 	arch = any
@@ -9,6 +9,7 @@ pkgbase = kernelsu-dkms
 	makedepends = rust
 	makedepends = cargo
 	depends = dkms
+	optdepends = modloader
 	options = !strip
 	options = !emptydirs
 	source = kernelsu::git+https://github.com/supechicken/KernelSU#branch=waydroid-experimental
