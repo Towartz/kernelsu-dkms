@@ -126,7 +126,7 @@ if systemctl is-active --quiet waydroid-container 2>/dev/null; then
 fi
 
 export KSU_PACKAGE_NAME KSU_EXPECTED_SIZE KSU_EXPECTED_HASH
-makepkg -si --noconfirm "${MAKEPKG_ARGS[@]}"
+makepkg -sfi --noconfirm "${MAKEPKG_ARGS[@]}"
 
 PKGVER=$(awk -F= '/^pkgver=/{print $2; exit}' PKGBUILD)
 KVER=$(uname -r)
