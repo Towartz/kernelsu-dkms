@@ -131,7 +131,7 @@ sha256sums=(
 	'SKIP'
 	'a836794d044068ee44f0e60b4f45f4f58e810a23e79cb800b4cba1dd9004e369'
 	'a45b6d9b38cc0fa06ca3984999ddd6940f4b4e2a84a4fccbf7801784903ef762'
-	'0bb3096d98e5ac4539d9b074ff4331874713100972326a410a1068d262e19eba'
+	'f825690f91a994b5d8ac3ac0a4458580c9e5046623d5ee18fc3ec9b172eabcca'
 	'05feaafbbac794a68c7eeea8c0a4c5616fc9f6ef7e4b7540baf3f5d43fad5fb0'
 	'f01d10fbcfba1b83134746ccfdc7ef4ceb61fa43593b94f039eac3469637429c'
 )
@@ -183,8 +183,14 @@ package() {
 
 	echo "ksu git ver: $_count" >&2
 
+	local _manager_args=""
+	[ -n "${KSU_PACKAGE_NAME:-}" ] && _manager_args+=" KSU_PACKAGE_NAME=${KSU_PACKAGE_NAME}"
+	[ -n "${KSU_EXPECTED_SIZE:-}" ] && _manager_args+=" KSU_EXPECTED_SIZE=${KSU_EXPECTED_SIZE}"
+	[ -n "${KSU_EXPECTED_HASH:-}" ] && _manager_args+=" KSU_EXPECTED_HASH=${KSU_EXPECTED_HASH}"
+
 	sed "s|@PKGVER@|${pkgver}|g;\
-    s|@KSU_GIT_VERSION@|${_count}|g;" "$(readlink -f dkms.conf)" >"$dest/dkms.conf"
+    s|@KSU_GIT_VERSION@|${_count}|g;\
+    s|@KSU_MANAGER_ARGS@|${_manager_args}|g;" "$(readlink -f dkms.conf)" >"$dest/dkms.conf"
 
 	install -Dm644 "$(readlink -f Makefile)" "$dest/Makefile"
 
