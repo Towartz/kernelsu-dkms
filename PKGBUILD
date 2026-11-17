@@ -1,15 +1,15 @@
 # shellcheck shell=bash
 # AUR Maintainer: Shadichy <shadichy@blisslabs.org>
 
-_pkg=kernelsu
-pkgname=${_pkg}-dkms
-pkgver=3.3.1+28+gb42ad459
+_pkg=kernelsu-next
+pkgname=kernelsu-dkms
+pkgver=3.4.2+198+g7ccf6147
 _ver=$pkgver
 pkgrel=1
-_branch=waydroid-experimental
-pkgdesc="A Kernel based root solution for Android. DKMS module for Container-based solutions such as Waydroid."
+_branch=dev
+pkgdesc="A Kernel based root solution for Android (KernelSU-Next). DKMS module for Container-based solutions such as Waydroid."
 arch=('any')
-url="https://github.com/supechicken/KernelSU"
+url="https://github.com/KernelSU-Next/KernelSU-Next"
 _upstream="https://github.com/tiann/$_pkg.git"
 license=('GPL-2.0-only')
 depends=('dkms')
@@ -119,9 +119,9 @@ chmod +x DLAGENTS
 export DLAGENTS="shallowclone::$(realpath "./DLAGENTS") %u %o"
 
 source=(
-	"${_pkg}::git+${url}#branch=${_branch}"
+	"${_pkg}::git+${url}.git#branch=${_branch}"
 	'Makefile'
-	'0001-Patch-Kbuild-for-dkms.patch'
+	'0001-Patch-KernelSU-Next-for-dkms-and-waydroid.patch'
 	'dkms.conf'
 	'00-kernelsu.conf'
 	'load-kernelsu.in'
@@ -130,29 +130,21 @@ source=(
 sha256sums=(
 	'SKIP'
 	'a836794d044068ee44f0e60b4f45f4f58e810a23e79cb800b4cba1dd9004e369'
-	'a45b6d9b38cc0fa06ca3984999ddd6940f4b4e2a84a4fccbf7801784903ef762'
-	'f825690f91a994b5d8ac3ac0a4458580c9e5046623d5ee18fc3ec9b172eabcca'
+	'0dc7f7db3f4c322f4c1c34a575195543723ae1386b0a66999594487047ecc5d4'
+	'4fadba7db1e16d825d463e7a985a51cbe053185cc117f2081c92d5671b148541'
 	'05feaafbbac794a68c7eeea8c0a4c5616fc9f6ef7e4b7540baf3f5d43fad5fb0'
 	'f01d10fbcfba1b83134746ccfdc7ef4ceb61fa43593b94f039eac3469637429c'
 )
 
 pkgver() {
 	cd "$srcdir/$_pkg"
-
-	{
-		if ! git remote add upstream "${_upstream}" 2>/dev/null; then
-			git remote set-url upstream "${_upstream}"
-		fi
-		git fetch --tags upstream v${_ver%%'+'*}
-		git fetch --unshallow --no-tags origin "$_branch" || :
-	} >/dev/null 2>&1
-
+	git fetch --unshallow --tags origin "$_branch" >/dev/null 2>&1 || true
 	git describe --long --tags | sed 's#v##;s#-RC#.rc#;s#-#+#g'
 }
 
 prepare() {
 	cd "$srcdir/$_pkg"
-	git apply "$srcdir/0001-Patch-Kbuild-for-dkms.patch"
+	git apply "$srcdir/0001-Patch-KernelSU-Next-for-dkms-and-waydroid.patch"
 }
 
 build() {
@@ -169,9 +161,10 @@ package() {
 
 	cd "$_pkg"
 
-	local _major _count _realver
+	local _major _count _realver _tag
 	_major=${pkgver%%.*}
 	_count=$(git rev-list --count HEAD 2>/dev/null)
+	_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${pkgver%%'+'*}")
 	_realver=$((_major * 10000 + _count))
 
 	local buildfile=kernel/Kbuild
@@ -181,15 +174,16 @@ package() {
 
 	cd "$srcdir"
 
-	echo "ksu git ver: $_count" >&2
+	echo "ksu git ver: $_count (tag: $_tag)" >&2
 
 	local _manager_args=""
-	[ -n "${KSU_PACKAGE_NAME:-}" ] && _manager_args+=" KSU_PACKAGE_NAME=${KSU_PACKAGE_NAME}"
-	[ -n "${KSU_EXPECTED_SIZE:-}" ] && _manager_args+=" KSU_EXPECTED_SIZE=${KSU_EXPECTED_SIZE}"
-	[ -n "${KSU_EXPECTED_HASH:-}" ] && _manager_args+=" KSU_EXPECTED_HASH=${KSU_EXPECTED_HASH}"
+	[ -n "${KSU_MANAGER_PACKAGE:-}" ] && _manager_args+=" KSU_MANAGER_PACKAGE=${KSU_MANAGER_PACKAGE}"
+	[ -n "${KSU_NEXT_MANAGER_SIZE:-}" ] && _manager_args+=" KSU_NEXT_MANAGER_SIZE=${KSU_NEXT_MANAGER_SIZE}"
+	[ -n "${KSU_NEXT_MANAGER_HASH:-}" ] && _manager_args+=" KSU_NEXT_MANAGER_HASH=${KSU_NEXT_MANAGER_HASH}"
 
 	sed "s|@PKGVER@|${pkgver}|g;\
     s|@KSU_GIT_VERSION@|${_count}|g;\
+    s|@KSU_GIT_TAG@|${_tag}|g;\
     s|@KSU_MANAGER_ARGS@|${_manager_args}|g;" "$(readlink -f dkms.conf)" >"$dest/dkms.conf"
 
 	install -Dm644 "$(readlink -f Makefile)" "$dest/Makefile"

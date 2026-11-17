@@ -3,9 +3,9 @@ set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
 
-KSU_PACKAGE_NAME="${KSU_PACKAGE_NAME:-}"
-KSU_EXPECTED_SIZE="${KSU_EXPECTED_SIZE:-}"
-KSU_EXPECTED_HASH="${KSU_EXPECTED_HASH:-}"
+KSU_MANAGER_PACKAGE="${KSU_MANAGER_PACKAGE:-}"
+KSU_NEXT_MANAGER_SIZE="${KSU_NEXT_MANAGER_SIZE:-}"
+KSU_NEXT_MANAGER_HASH="${KSU_NEXT_MANAGER_HASH:-}"
 APK_PATH=""
 MAKEPKG_ARGS=()
 
@@ -14,28 +14,20 @@ usage() {
 Usage: ./install.sh [options] [-- makepkg-args...]
 
 Options:
-  --next, --ksu-next   Configure manager signature for KernelSU-Next
-                       (com.rifsxd.ksunext, size 0x3e6)
   --apk <path>         Extract manager signature size and sha256 from APK
-  --pkg <name>         Override KSU_PACKAGE_NAME (e.g. spoofed package name)
+  --pkg <name>         Set KSU_MANAGER_PACKAGE (e.g. spoofed package name)
   -h, --help           Show this help
 EOF
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --next|--ksu-next)
-      : "${KSU_PACKAGE_NAME:=com.rifsxd.ksunext}"
-      KSU_EXPECTED_SIZE="0x3e6"
-      KSU_EXPECTED_HASH="79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7"
-      shift
-      ;;
     --apk)
       APK_PATH="${2:?Missing path for --apk}"
       shift 2
       ;;
     --pkg)
-      KSU_PACKAGE_NAME="${2:?Missing package name for --pkg}"
+      KSU_MANAGER_PACKAGE="${2:?Missing package name for --pkg}"
       shift 2
       ;;
     -h|--help)
@@ -91,10 +83,7 @@ if [ -n "$APK_PATH" ]; then
     echo "APK not found: $APK_PATH" >&2
     exit 1
   fi
-  read -r KSU_EXPECTED_SIZE KSU_EXPECTED_HASH < <(extract_apk_sig "$APK_PATH")
-  if [ -z "$KSU_PACKAGE_NAME" ] && [[ "$(basename "$APK_PATH")" == *KernelSU_Next* || "$(basename "$APK_PATH")" == *ksunext* ]]; then
-    KSU_PACKAGE_NAME="com.rifsxd.ksunext"
-  fi
+  read -r KSU_NEXT_MANAGER_SIZE KSU_NEXT_MANAGER_HASH < <(extract_apk_sig "$APK_PATH")
 fi
 
 install_modloader() {
@@ -125,7 +114,7 @@ if systemctl is-active --quiet waydroid-container 2>/dev/null; then
   sudo systemctl stop waydroid-container
 fi
 
-export KSU_PACKAGE_NAME KSU_EXPECTED_SIZE KSU_EXPECTED_HASH
+export KSU_MANAGER_PACKAGE KSU_NEXT_MANAGER_SIZE KSU_NEXT_MANAGER_HASH
 makepkg -sfi --noconfirm "${MAKEPKG_ARGS[@]}"
 
 PKGVER=$(awk -F= '/^pkgver=/{print $2; exit}' PKGBUILD)
